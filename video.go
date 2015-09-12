@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-gl/gl"
 	"github.com/scottferg/Fergulator/nes"
 	"github.com/scottferg/Go-SDL/gfx"
 	"github.com/scottferg/Go-SDL/sdl"
+	"github.com/go-gl/gl/v2.1/gl"
 	"log"
 	"math"
 	"os"
@@ -16,43 +16,48 @@ type Video struct {
 	videoTick     <-chan []uint32
 	screen        *sdl.Surface
 	fpsmanager    *gfx.FPSmanager
-	prog          gl.Program
-	texture       gl.Texture
-	width, height int
-	textureUni    gl.AttribLocation
+	prog          uint32
+	texture       uint32
+	width, height int32
+	textureUni    int32
 	Fullscreen    bool
 }
 
-func createProgram(vertShaderSrc string, fragShaderSrc string) gl.Program {
+func createProgram(vertShaderSrc string, fragShaderSrc string) uint32 {
 	vertShader := loadShader(gl.VERTEX_SHADER, vertShaderSrc)
 	fragShader := loadShader(gl.FRAGMENT_SHADER, fragShaderSrc)
 
 	prog := gl.CreateProgram()
 
-	prog.AttachShader(vertShader)
-	prog.AttachShader(fragShader)
-	prog.Link()
+	gl.AttachShader(prog,vertShader)
+	gl.AttachShader(prog,fragShader)
+	gl.LinkProgram(prog)
 
-	if prog.Get(gl.LINK_STATUS) != gl.TRUE {
-		log := prog.GetInfoLog()
-		panic(fmt.Errorf("Failed to link program: %v", log))
+	var status int32
+	gl.GetProgramiv(prog, gl.LINK_STATUS, &status)
+	if status != gl.TRUE {
+		//log := gl.GetInfoLogARB(prog)
+		panic(fmt.Errorf("Failed to link program: , "))
 	}
 
 	return prog
 }
 
-func loadShader(shaderType gl.GLenum, source string) gl.Shader {
+func loadShader(shaderType uint32, source string) uint32 {
 	shader := gl.CreateShader(shaderType)
 	if err := gl.GetError(); err != gl.NO_ERROR {
 		panic(fmt.Errorf("gl error: %v", err))
 	}
 
-	shader.Source(source)
-	shader.Compile()
+	csource := gl.Str(source)
+	gl.ShaderSource(shader, 1, &csource, nil)
+	gl.CompileShader(shader)
 
-	if shader.Get(gl.COMPILE_STATUS) != gl.TRUE {
-		log := shader.GetInfoLog()
-		panic(fmt.Errorf("Failed to compile shader: %v, shader: %v", log, source))
+	var status int32
+	gl.GetShaderiv(shader, gl.COMPILE_STATUS, &status)
+	if status != gl.TRUE {
+		//log := shader.GetInfoLog()
+		panic(fmt.Errorf("Failed to compile shader:  shader: %v", source))
 	}
 
 	return shader
@@ -74,7 +79,7 @@ func (v *Video) Init(t <-chan []uint32, n string) {
 	sdl.WM_SetCaption(fmt.Sprintf("Fergulator - %s", n), "")
 
 	v.initGL()
-	v.Reshape(int(v.screen.W), int(v.screen.H))
+	v.Reshape(v.screen.W, v.screen.H)
 
 	v.fpsmanager = gfx.NewFramerate()
 	v.fpsmanager.SetFramerate(60)
@@ -83,46 +88,54 @@ func (v *Video) Init(t <-chan []uint32, n string) {
 }
 
 func (v *Video) initGL() {
-	if gl.Init() != 0 {
-		panic(sdl.GetError())
+	if err := gl.Init(); err != nil {
+		panic(err)
 	}
 
-	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 	gl.Enable(gl.CULL_FACE)
 	gl.Enable(gl.DEPTH_TEST)
+	gl.ClearColor(0.0, 0.0, 0.0, 1.0)
 
 	v.prog = createProgram(vertShaderSrcDef, fragShaderSrcDef)
-	posAttrib := v.prog.GetAttribLocation("vPosition")
-	texCoordAttr := v.prog.GetAttribLocation("vTexCoord")
-	v.textureUni = v.prog.GetAttribLocation("texture")
+	posAttrib := uint32(gl.GetAttribLocation(v.prog,gl.Str("vPosition"+ "\x00")))
+	texCoordAttr := uint32(gl.GetAttribLocation(v.prog,gl.Str("vTexCoord"+ "\x00")))
+	v.textureUni = gl.GetAttribLocation(v.prog,gl.Str("texture"+ "\x00"))
 
-	v.texture = gl.GenTexture()
+  	var texture uint32
+  	gl.GenTextures(1, &texture)
 	gl.ActiveTexture(gl.TEXTURE0)
-	v.texture.Bind(gl.TEXTURE_2D)
+	gl.BindTexture(gl.TEXTURE_2D,texture)
 
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 
-	v.prog.Use()
-	posAttrib.EnableArray()
-	texCoordAttr.EnableArray()
+	gl.UseProgram(v.prog)
+	gl.EnableVertexAttribArray(posAttrib)
+	gl.EnableVertexAttribArray(texCoordAttr)
+	//posAttrib.EnableArray()
+	//texCoordAttr.EnableArray()
 
-	vertVBO := gl.GenBuffer()
-	vertVBO.Bind(gl.ARRAY_BUFFER)
+	var vbo uint32
+   	gl.GenBuffers(1, &vbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
 	verts := []float32{-1.0, 1.0, -1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0, 1.0, -1.0, 1.0}
-	gl.BufferData(gl.ARRAY_BUFFER, len(verts)*int(unsafe.Sizeof(verts[0])), &verts[0], gl.STATIC_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, len(verts)*int(unsafe.Sizeof(verts[0])), gl.Ptr(verts), gl.STATIC_DRAW)
 
-	textCoorBuf := gl.GenBuffer()
-	textCoorBuf.Bind(gl.ARRAY_BUFFER)
+	var textCoorBuf uint32
+	gl.GenBuffers(1,&textCoorBuf)
+	gl.BindBuffer(gl.ARRAY_BUFFER, textCoorBuf)
 	texVerts := []float32{0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0}
-	gl.BufferData(gl.ARRAY_BUFFER, len(texVerts)*int(unsafe.Sizeof(texVerts[0])), &texVerts[0], gl.STATIC_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, len(texVerts)*int(unsafe.Sizeof(texVerts[0])), gl.Ptr(texVerts), gl.STATIC_DRAW)
 
-	posAttrib.AttribPointer(2, gl.FLOAT, false, 0, uintptr(0))
-	texCoordAttr.AttribPointer(2, gl.FLOAT, false, 0, uintptr(0))
+
+	gl.VertexAttribPointer(posAttrib,2, gl.FLOAT, false, 0, gl.PtrOffset(0))
+	gl.VertexAttribPointer(texCoordAttr,2, gl.FLOAT, false, 0, gl.PtrOffset(0))
+	//posAttrib.AttribPointer(2, gl.FLOAT, false, 0, uintptr(0))
+	//texCoordAttr.AttribPointer(2, gl.FLOAT, false, 0, uintptr(0))
 }
 
-func (v *Video) ResizeEvent(w, h int) {
-	v.screen = sdl.SetVideoMode(w, h, 32, sdl.OPENGL|sdl.RESIZABLE)
+func (v *Video) ResizeEvent(w, h int32) {
+	v.screen = sdl.SetVideoMode(int(w), int(h), 32, sdl.OPENGL|sdl.RESIZABLE)
 	v.Reshape(w, h)
 }
 
@@ -131,18 +144,18 @@ func (v *Video) FullscreenEvent() {
 	v.Reshape(1440, 900)
 }
 
-func (v *Video) Reshape(width int, height int) {
-	x_offset := 0
-	y_offset := 0
+func (v *Video) Reshape(width int32, height int32) {
+	var x_offset int32 = 0
+	var y_offset int32 = 0
 
 	r := ((float64)(height)) / ((float64)(width))
 
 	if r > 0.9375 { // Height taller than ratio
-		h := (int)(math.Floor((float64)(0.9375 * (float64)(width))))
+		h := (int32)(math.Floor((float64)(0.9375 * (float64)(width))))
 		y_offset = (height - h) / 2
 		height = h
 	} else if r < 0.9375 { // Width wider
-		w := (int)(math.Floor((float64)((256.0 / 240.0) * (float64)(height))))
+		w := (int32)(math.Floor((float64)((256.0 / 240.0) * (float64)(height))))
 		x_offset = (width - w) / 2
 		width = w
 	}
@@ -164,13 +177,13 @@ func (v *Video) Render() {
 		case buf := <-v.videoTick:
 			gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-			v.prog.Use()
+			gl.UseProgram(v.prog)
 
 			gl.ActiveTexture(gl.TEXTURE0)
-			v.texture.Bind(gl.TEXTURE_2D)
+			gl.BindTexture(v.texture,gl.TEXTURE_2D)
 
 			gl.TexImage2D(gl.TEXTURE_2D, 0, 3, 240, 224, 0, gl.RGBA,
-				gl.UNSIGNED_INT_8_8_8_8, buf)
+				gl.UNSIGNED_INT_8_8_8_8, gl.Ptr(buf))
 
 			gl.DrawArrays(gl.TRIANGLES, 0, 6)
 
@@ -181,7 +194,7 @@ func (v *Video) Render() {
 		case ev := <-sdl.Events:
 			switch e := ev.(type) {
 			case sdl.ResizeEvent:
-				v.ResizeEvent(int(e.W), int(e.H))
+				v.ResizeEvent(e.W, e.H)
 			case sdl.QuitEvent:
 				os.Exit(0)
 			case sdl.KeyboardEvent:

@@ -9,7 +9,7 @@ const vertShaderSrcDef = `
 		texCoord = vec2(vTexCoord.x, -vTexCoord.y);
 		gl_Position = vec4((vPosition.xy * 2.0) - 1.0, vPosition.zw);
 	}
-`
+`+ "\x00"
 
 const fragShaderSrcDef = `
 	varying vec2 texCoord;
@@ -19,7 +19,7 @@ const fragShaderSrcDef = `
 		vec4 c = texture2D(texture, texCoord);
 		gl_FragColor = vec4(c.r, c.g, c.b, c.a);
 	}
-`
+`+ "\x00"
 const firstPassNtscArtifactVert = `
       #version 120
       uniform mat4 rubyMVPMatrix;
@@ -39,7 +39,7 @@ const firstPassNtscArtifactVert = `
          tex_coord = rubyTexCoord;
          pix_no = rubyTexCoord * rubyTextureSize * (rubyOutputSize / rubyInputSize);
       }
-`
+`+ "\x00"
 
 const firstPassNtscArtifactFrag = `
       #version 120
@@ -76,7 +76,7 @@ const firstPassNtscArtifactFrag = `
 
          gl_FragColor = vec4(yiq, 1.0);
       }
-`
+`+ "\x00"
 
 const secondPassNtscArtifactVert = `
       #version 120
@@ -97,7 +97,7 @@ const secondPassNtscArtifactVert = `
          tex_coord = rubyTexCoord;
          pix_no = rubyTexCoord * rubyTextureSize;
       }
-`
+`+ "\x00"
 
 const secondPassNtscArtifactFrag = `
       #version 120
@@ -144,7 +144,7 @@ const secondPassNtscArtifactFrag = `
          vec3 out_color = vec3(signal, signal * i_mod, signal * q_mod);
          gl_FragColor = vec4(out_color, 1.0);
       }
-`
+`+ "\x00"
 
 const thirdPassNtscArtifactVert = `
       #version 120
@@ -158,7 +158,7 @@ const thirdPassNtscArtifactVert = `
          gl_Position = rubyMVPMatrix * vec4(rubyVertexCoord, 0.0, 1.0);
          tex_coord = rubyTexCoord;
       }
-`
+`+ "\x00"
 const thirdPassNtscArtifactFrag = `
       #version 120
       varying vec2 tex_coord;
@@ -209,4 +209,4 @@ const thirdPassNtscArtifactFrag = `
          vec3 rgb = yiq2rgb(signal);
          gl_FragColor = vec4(rgb, 1.0);
       }
-`
+`+ "\x00"
